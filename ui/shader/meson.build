@@ -1,5 +1,6 @@
 shaders = [
   ['texture-blit', 'frag'],
+  ['texture-blit-external', 'frag'],
   ['texture-blit', 'vert'],
   ['texture-blit-flip', 'vert'],
 ]
