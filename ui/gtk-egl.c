@@ -376,9 +376,11 @@ void gd_egl_scanout_flush(DisplayChangeListener *dcl,
         py_offset = (ph_widget - ph_surface) / 2;
     }
 
+    egl_fb_update_external(vc->gfx.gls, &vc->gfx.guest_fb);
     egl_fb_setup_default(&vc->gfx.win_fb, pw_surface, ph_surface,
                          px_offset, py_offset);
     if (vc->gfx.cursor_fb.texture) {
+        egl_fb_update_external(vc->gfx.gls, &vc->gfx.cursor_fb);
         egl_texture_blit(vc->gfx.gls, &vc->gfx.win_fb, &vc->gfx.guest_fb,
                          vc->gfx.y0_top);
         egl_texture_blend(vc->gfx.gls, &vc->gfx.win_fb, &vc->gfx.cursor_fb,

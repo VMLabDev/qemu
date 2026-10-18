@@ -75,6 +75,8 @@ void gd_gl_area_draw(VirtualConsole *vc)
     }
 
     if (vc->gfx.scanout_mode) {
+        GLint area_fb;
+
         if (!vc->gfx.guest_fb.framebuffer) {
             return;
         }
@@ -89,6 +91,10 @@ void gd_gl_area_draw(VirtualConsole *vc)
             qemu_console_hw_gl_block(vc->gfx.dcl.con, true);
         }
 #endif
+
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &area_fb);
+        egl_fb_update_external(vc->gfx.gls, &vc->gfx.guest_fb);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, area_fb);
 
         glBindFramebuffer(GL_READ_FRAMEBUFFER, vc->gfx.guest_fb.framebuffer);
         /* GtkGLArea sets GL_DRAW_FRAMEBUFFER for us */
