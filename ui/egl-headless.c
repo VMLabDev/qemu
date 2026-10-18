@@ -164,8 +164,10 @@ static void egl_scanout_flush(DisplayChangeListener *dcl,
 
     eglMakeCurrent(qemu_egl_display, EGL_NO_SURFACE,
                    EGL_NO_SURFACE, qemu_egl_rn_ctx);
+    egl_fb_update_external(edpy->gls, &edpy->guest_fb);
     if (edpy->cursor_fb.texture) {
         /* have cursor -> render using textures */
+        egl_fb_update_external(edpy->gls, &edpy->cursor_fb);
         egl_texture_blit(edpy->gls, &edpy->blit_fb, &edpy->guest_fb,
                          !edpy->y_0_top);
         egl_texture_blend(edpy->gls, &edpy->blit_fb, &edpy->cursor_fb,
