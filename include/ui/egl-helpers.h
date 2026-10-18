@@ -54,6 +54,7 @@ bool egl_dmabuf_export_texture(uint32_t tex_id, int *fd, EGLint *offset,
 
 void egl_dmabuf_import_texture(QemuDmaBuf *dmabuf);
 void egl_dmabuf_release_texture(QemuDmaBuf *dmabuf);
+bool egl_texture_is_external(uint32_t texture);
 void egl_dmabuf_create_sync(QemuDmaBuf *dmabuf);
 void egl_dmabuf_create_fence(QemuDmaBuf *dmabuf);
 

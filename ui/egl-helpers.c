@@ -323,6 +323,8 @@ bool egl_dmabuf_export_texture(uint32_t tex_id, int *fd, EGLint *offset,
     return true;
 }
 
+static GHashTable *egl_external_textures;
+
 void egl_dmabuf_import_texture(QemuDmaBuf *dmabuf)
 {
     EGLImageKHR image = EGL_NO_IMAGE_KHR;
@@ -409,6 +411,9 @@ void egl_dmabuf_import_texture(QemuDmaBuf *dmabuf)
         return;
     }
 
+    while (glGetError() != GL_NO_ERROR) {
+        /* clear stale errors */
+    }
     glGenTextures(1, &texture);
     qemu_dmabuf_set_texture(dmabuf, texture);
     glBindTexture(GL_TEXTURE_2D, texture);
@@ -416,7 +421,35 @@ void egl_dmabuf_import_texture(QemuDmaBuf *dmabuf)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, (GLeglImageOES)image);
+    if (glGetError() != GL_NO_ERROR) {
+        /* the format/modifier pair may be external-only */
+        glDeleteTextures(1, &texture);
+        glGenTextures(1, &texture);
+        qemu_dmabuf_set_texture(dmabuf, texture);
+        glBindTexture(GL_TEXTURE_EXTERNAL_OES, texture);
+        glTexParameteri(GL_TEXTURE_EXTERNAL_OES,
+                        GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_EXTERNAL_OES,
+                        GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES,
+                                     (GLeglImageOES)image);
+        if (glGetError() != GL_NO_ERROR) {
+            error_report("egl: failed to import dma-buf as a texture");
+        } else {
+            if (!egl_external_textures) {
+                egl_external_textures = g_hash_table_new(NULL, NULL);
+            }
+            g_hash_table_add(egl_external_textures, GUINT_TO_POINTER(texture));
+        }
+    }
     eglDestroyImageKHR(qemu_egl_display, image);
+}
+
+bool egl_texture_is_external(uint32_t texture)
+{
+    return egl_external_textures &&
+           g_hash_table_contains(egl_external_textures,
+                                 GUINT_TO_POINTER(texture));
 }
 
 void egl_dmabuf_release_texture(QemuDmaBuf *dmabuf)
@@ -428,6 +461,9 @@ void egl_dmabuf_release_texture(QemuDmaBuf *dmabuf)
         return;
     }
 
+    if (egl_external_textures) {
+        g_hash_table_remove(egl_external_textures, GUINT_TO_POINTER(texture));
+    }
     glDeleteTextures(1, &texture);
     qemu_dmabuf_set_texture(dmabuf, 0);
 }
