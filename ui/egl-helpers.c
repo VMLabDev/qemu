@@ -97,6 +97,7 @@ void egl_fb_destroy(egl_fb *fb)
     fb->y = 0;
     fb->texture = 0;
     fb->framebuffer = 0;
+    fb->external_texture = 0;
 }
 
 void egl_fb_setup_default(egl_fb *fb, int width, int height, int x, int y)
@@ -111,7 +112,21 @@ void egl_fb_setup_default(egl_fb *fb, int width, int height, int x, int y)
 void egl_fb_setup_for_tex(egl_fb *fb, int width, int height,
                           GLuint texture, bool delete)
 {
+#ifdef CONFIG_GBM
+    if (egl_texture_is_external(texture)) {
+        /* external textures cannot be attached, so attach a copy */
+        assert(!delete);
+        if (!fb->external_texture ||
+            fb->width != width || fb->height != height) {
+            egl_fb_setup_new_tex(fb, width, height);
+        }
+        fb->external_texture = texture;
+        return;
+    }
+#endif
+
     egl_fb_delete_texture(fb);
+    fb->external_texture = 0;
 
     fb->width = width;
     fb->height = height;
@@ -136,6 +151,23 @@ void egl_fb_setup_new_tex(egl_fb *fb, int width, int height)
                  0, GL_BGRA, GL_UNSIGNED_BYTE, 0);
 
     egl_fb_setup_for_tex(fb, width, height, texture, true);
+}
+
+/*
+ * Copy the external texture behind fb into fb's own texture.  Call this
+ * before reading or blitting from fb, as the guest may have changed it.
+ */
+void egl_fb_update_external(QemuGLShader *gls, egl_fb *fb)
+{
+    if (!fb->external_texture) {
+        return;
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER_EXT, fb->framebuffer);
+    glViewport(0, 0, fb->width, fb->height);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_EXTERNAL_OES, fb->external_texture);
+    qemu_gl_run_texture_blit_external(gls);
 }
 
 void egl_fb_blit(egl_fb *dst, egl_fb *src, bool flip)

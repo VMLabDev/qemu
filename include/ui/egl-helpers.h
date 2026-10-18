@@ -22,6 +22,7 @@ typedef struct egl_fb {
     GLuint texture;
     GLuint framebuffer;
     bool delete_texture;
+    GLuint external_texture;
     QemuDmaBuf *dmabuf;
 } egl_fb;
 
@@ -32,6 +33,7 @@ void egl_fb_setup_default(egl_fb *fb, int width, int height, int x, int y);
 void egl_fb_setup_for_tex(egl_fb *fb, int width, int height,
                           GLuint texture, bool delete);
 void egl_fb_setup_new_tex(egl_fb *fb, int width, int height);
+void egl_fb_update_external(QemuGLShader *gls, egl_fb *fb);
 void egl_fb_blit(egl_fb *dst, egl_fb *src, bool flip);
 void egl_fb_read(DisplaySurface *dst, egl_fb *src);
 void egl_fb_read_rect(DisplaySurface *dst, egl_fb *src, int x, int y, int w, int h);
