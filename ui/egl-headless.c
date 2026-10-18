@@ -151,8 +151,10 @@ static void egl_scanout_flush(DisplayChangeListener *dcl,
     }
     assert(surface_format(edpy->ds) == PIXMAN_x8r8g8b8);
 
+    egl_fb_update_external(edpy->gls, &edpy->guest_fb);
     if (edpy->cursor_fb.texture) {
         /* have cursor -> render using textures */
+        egl_fb_update_external(edpy->gls, &edpy->cursor_fb);
         egl_texture_blit(edpy->gls, &edpy->blit_fb, &edpy->guest_fb,
                          !edpy->y_0_top);
         egl_texture_blend(edpy->gls, &edpy->blit_fb, &edpy->cursor_fb,
