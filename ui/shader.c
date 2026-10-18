@@ -26,21 +26,26 @@
  */
 #include "qemu/osdep.h"
 #include <epoxy/gl.h>
+#include "qemu/error-report.h"
 #include "ui/shader.h"
 
 #include "ui/shader/texture-blit-vert.h"
 #include "ui/shader/texture-blit-flip-vert.h"
 #include "ui/shader/texture-blit-frag.h"
+#include "ui/shader/texture-blit-external-frag.h"
 
 struct QemuGLShader {
     GLint texture_blit_prog;
     GLint texture_blit_flip_prog;
+    GLint texture_blit_external_prog;
+    bool texture_blit_external_failed;
     GLint texture_blit_vao;
+    GLuint texture_blit_vbo;
 };
 
 /* ---------------------------------------------------------------------- */
 
-static GLuint qemu_gl_init_texture_blit(GLint texture_blit_prog)
+static GLuint qemu_gl_init_texture_blit(QemuGLShader *gls)
 {
     static const GLfloat in_position[] = {
         -1, -1,
@@ -49,18 +54,18 @@ static GLuint qemu_gl_init_texture_blit(GLint texture_blit_prog)
         1,   1,
     };
     GLint l_position;
-    GLuint vao, buffer;
+    GLuint vao;
 
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
 
     /* this is the VBO that holds the vertex data */
-    glGenBuffers(1, &buffer);
-    glBindBuffer(GL_ARRAY_BUFFER, buffer);
+    glGenBuffers(1, &gls->texture_blit_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, gls->texture_blit_vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(in_position), in_position,
                  GL_STATIC_DRAW);
 
-    l_position = glGetAttribLocation(texture_blit_prog, "in_position");
+    l_position = glGetAttribLocation(gls->texture_blit_prog, "in_position");
     glVertexAttribPointer(l_position, 2, GL_FLOAT, GL_FALSE, 0, 0);
     glEnableVertexAttribArray(l_position);
 
@@ -148,6 +153,46 @@ end:
     return program;
 }
 
+bool qemu_gl_run_texture_blit_external(QemuGLShader *gls)
+{
+    GLint l_position;
+    GLuint vao;
+
+    if (!gls->texture_blit_external_prog) {
+        if (gls->texture_blit_external_failed) {
+            return false;
+        }
+        /* texture_blit_flip_vert maps texture coordinates 1:1 */
+        gls->texture_blit_external_prog = qemu_gl_create_compile_link_program
+            (texture_blit_flip_vert_src, texture_blit_external_frag_src);
+        if (!gls->texture_blit_external_prog) {
+            error_report("shader: cannot sample external textures");
+            gls->texture_blit_external_failed = true;
+            return false;
+        }
+    }
+
+    /*
+     * Vertex array objects are not shared between contexts, and callers
+     * may run this in a context other than the one that created gls.
+     */
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, gls->texture_blit_vbo);
+    l_position = glGetAttribLocation(gls->texture_blit_external_prog,
+                                     "in_position");
+    glVertexAttribPointer(l_position, 2, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(l_position);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glUseProgram(gls->texture_blit_external_prog);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    glBindVertexArray(0);
+    glDeleteVertexArrays(1, &vao);
+    return true;
+}
+
 /* ---------------------------------------------------------------------- */
 
 QemuGLShader *qemu_gl_init_shader(void)
@@ -162,8 +207,7 @@ QemuGLShader *qemu_gl_init_shader(void)
         exit(1);
     }
 
-    gls->texture_blit_vao =
-        qemu_gl_init_texture_blit(gls->texture_blit_prog);
+    gls->texture_blit_vao = qemu_gl_init_texture_blit(gls);
 
     return gls;
 }
@@ -175,6 +219,8 @@ void qemu_gl_fini_shader(QemuGLShader *gls)
     }
     glDeleteProgram(gls->texture_blit_prog);
     glDeleteProgram(gls->texture_blit_flip_prog);
+    glDeleteProgram(gls->texture_blit_external_prog);
+    glDeleteBuffers(1, &gls->texture_blit_vbo);
     glDeleteProgram(gls->texture_blit_vao);
     g_free(gls);
 }
